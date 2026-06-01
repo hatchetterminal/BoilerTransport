@@ -1,0 +1,83 @@
+{
+  "name": "UserPreferences",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string"
+    },
+    "favorite_routes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "favorite_lots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notifications_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "event_alerts": {
+      "type": "boolean",
+      "default": true
+    },
+    "bus_delay_alerts": {
+      "type": "boolean",
+      "default": true
+    },
+    "home_location": {
+      "type": "string"
+    },
+    "default_permit": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_email"
+  ],
+  "rls": {
+    "create": {
+      "user_email": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

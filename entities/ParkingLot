@@ -1,0 +1,92 @@
+{
+  "name": "ParkingLot",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Name of the parking lot"
+    },
+    "code": {
+      "type": "string",
+      "description": "Lot code (e.g., A, B, C)"
+    },
+    "latitude": {
+      "type": "number"
+    },
+    "longitude": {
+      "type": "number"
+    },
+    "total_spaces": {
+      "type": "number"
+    },
+    "availability_pattern": {
+      "type": "object",
+      "description": "Typical availability by hour (0-23)",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "open",
+          "half",
+          "full"
+        ]
+      }
+    },
+    "required_permits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "time_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "string"
+          },
+          "rule": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "is_garage": {
+      "type": "boolean"
+    },
+    "event_restricted": {
+      "type": "boolean",
+      "default": false
+    },
+    "event_notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "code",
+    "latitude",
+    "longitude"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {},
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "name": "Bus",
+  "type": "object",
+  "properties": {
+    "bus_id": {
+      "type": "string"
+    },
+    "route_id": {
+      "type": "string"
+    },
+    "latitude": {
+      "type": "number"
+    },
+    "longitude": {
+      "type": "number"
+    },
+    "heading": {
+      "type": "number"
+    },
+    "next_stop": {
+      "type": "string"
+    },
+    "eta_minutes": {
+      "type": "number"
+    },
+    "delay_minutes": {
+      "type": "number",
+      "default": 0
+    },
+    "is_delayed": {
+      "type": "boolean",
+      "default": false
+    },
+    "capacity_status": {
+      "type": "string",
+      "enum": [
+        "empty",
+        "moderate",
+        "crowded",
+        "full"
+      ]
+    }
+  },
+  "required": [
+    "bus_id",
+    "route_id",
+    "latitude",
+    "longitude"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {},
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

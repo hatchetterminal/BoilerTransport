@@ -1,0 +1,91 @@
+{
+  "name": "CampusEvent",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "venue": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "football",
+        "basketball",
+        "concert",
+        "graduation",
+        "special"
+      ]
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "end_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expected_attendance": {
+      "type": "number"
+    },
+    "restricted_lots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "closed_lots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "alternative_lots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "shuttle_routes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "special_instructions": {
+      "type": "string"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "title",
+    "venue",
+    "start_time",
+    "end_time"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {},
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
