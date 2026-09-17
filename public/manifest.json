@@ -1,0 +1,17 @@
+{
+  "name": "Boiler Transport",
+  "short_name": "Transport",
+  "description": "Campus parking, bus, and event transportation information in one place.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "/assets/app-icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

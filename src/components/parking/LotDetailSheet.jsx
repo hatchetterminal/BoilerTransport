@@ -1,88 +1,109 @@
 import React from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { 
-  Car, Clock, AlertTriangle, Star, Navigation, 
-  Shield, Calendar
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Car,
+  Clock,
+  AlertTriangle,
+  Star,
+  Navigation,
+  Shield,
+  Calendar,
+  ExternalLink,
+  MapPin,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getAvailabilityStatus } from '@/lib/transport-utils';
+import {
+  getAvailabilityMeta,
+  getParkingCategories,
+  getParkingFacilityLabel,
+} from '@/lib/parking-utils';
+import { isNativeApp, openDirections, openExternalUrl } from '@/lib/native-platform';
 
-const getAvailabilityColor = (status) => {
-  switch (status) {
-    case 'open': return 'bg-green-500';
-    case 'half': return 'bg-amber-500';
-    case 'full': return 'bg-red-500';
-    default: return 'bg-gray-400';
-  }
-};
-
-const getAvailabilityBg = (status) => {
-  switch (status) {
-    case 'open': return 'bg-green-50 text-green-700 border-green-200';
-    case 'half': return 'bg-amber-50 text-amber-700 border-amber-200';
-    case 'full': return 'bg-red-50 text-red-700 border-red-200';
-    default: return 'bg-gray-50 text-gray-700 border-gray-200';
-  }
-};
-
-const getAvailabilityLabel = (status) => {
-  switch (status) {
-    case 'open': return 'Available';
-    case 'half': return 'Limited Spots';
-    case 'full': return 'Full';
-    default: return 'Unknown';
-  }
-};
-
-export default function LotDetailSheet({ lot, isOpen, onClose, isFavorite, onToggleFavorite, eventMode }) {
+export default function LotDetailSheet({
+  lot,
+  isOpen,
+  onClose,
+  isFavorite,
+  onToggleFavorite,
+  eventMode,
+}) {
   if (!lot) return null;
-  
+
   const currentHour = new Date().getHours();
-  const availability = lot.availability_pattern?.[currentHour] || 'open';
+  const availability = getAvailabilityMeta(lot, currentHour);
+  const parkingCategories = getParkingCategories(lot);
+  const hasAvailabilityPattern = Object.keys(lot.availability_pattern || {}).length > 0;
 
   // Generate hourly forecast
   const getHourlyForecast = () => {
     const forecast = [];
     for (let i = 0; i < 6; i++) {
       const hour = (currentHour + i) % 24;
-      const status = lot.availability_pattern?.[hour] || 'open';
+      const status = getAvailabilityStatus(lot, hour);
       forecast.push({
-        hour: hour === 0 ? '12am' : hour < 12 ? `${hour}am` : hour === 12 ? '12pm' : `${hour - 12}pm`,
+        hour:
+          hour === 0 ? '12am' : hour < 12 ? `${hour}am` : hour === 12 ? '12pm' : `${hour - 12}pm`,
         status,
-        isCurrent: i === 0
+        isCurrent: i === 0,
       });
     }
     return forecast;
   };
 
   return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl bg-white text-gray-900 p-0 z-[1001]">
+    <Sheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent
+        side="bottom"
+        className="h-[85vh] rounded-t-3xl bg-card text-foreground p-0 z-[2100]"
+      >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <SheetHeader className="px-6 pt-6 pb-4 border-b border-gray-100 bg-white">
+          <SheetHeader className="px-6 pt-6 pb-4 border-b border-border bg-card">
             <div className="flex items-start justify-between">
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
                   <Badge variant="outline" className="text-xs font-medium">
-                    Lot {lot.code}
+                    {lot.code || 'Parking'}
                   </Badge>
-                  {lot.is_garage && (
-                    <Badge variant="outline" className="text-xs">Garage</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {getParkingFacilityLabel(lot)}
+                  </Badge>
+                  {parkingCategories.includes('visitor') && (
+                    <Badge className="border-0 bg-blue-100 dark:bg-blue-950/50 text-xs text-blue-700 dark:text-blue-300">
+                      Visitor / paid
+                    </Badge>
                   )}
                 </div>
-                <SheetTitle className="text-2xl font-bold text-gray-900">
-                  {lot.name}
-                </SheetTitle>
+                <SheetTitle className="text-2xl font-bold text-foreground">{lot.name}</SheetTitle>
+                <SheetDescription className="sr-only">
+                  Parking status, restrictions, permit rules, and directions for {lot.name}.
+                </SheetDescription>
               </div>
               <button
+                type="button"
                 onClick={() => onToggleFavorite(lot.id)}
-                className="p-2 -mr-2"
+                className="p-2 mr-8"
+                aria-label={
+                  isFavorite ? `Remove ${lot.name} from favorites` : `Add ${lot.name} to favorites`
+                }
               >
                 <Star
                   className={`w-6 h-6 transition-colors ${
-                    isFavorite ? 'fill-amber-400 text-amber-400' : 'text-gray-300'
+                    isFavorite ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/60'
                   }`}
                 />
               </button>
@@ -90,21 +111,34 @@ export default function LotDetailSheet({ lot, isOpen, onClose, isFavorite, onTog
           </SheetHeader>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto bg-white px-6 py-5 space-y-6" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div
+            className="flex-1 overflow-y-auto bg-card px-6 py-5 space-y-6"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             {/* Current Status */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`p-4 rounded-2xl border ${getAvailabilityBg(availability)}`}
+              className={`p-4 rounded-2xl border ${availability.badgeClass}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full ${getAvailabilityColor(availability)}`} />
+                  <div
+                    className="h-4 w-4 rounded-full"
+                    style={{ backgroundColor: availability.color }}
+                  />
                   <div>
-                    <div className="font-semibold">{getAvailabilityLabel(availability)}</div>
+                    <div className="font-semibold">{availability.label}</div>
                     <div className="text-sm opacity-75">
-                      {lot.total_spaces ? `~${lot.total_spaces} total spaces` : 'Current status'}
+                      {availability.status === 'unknown'
+                        ? 'Availability is not reported'
+                        : hasAvailabilityPattern
+                          ? 'Typical time-of-day estimate'
+                          : 'See current restrictions below'}
                     </div>
+                    {lot.total_spaces > 0 && (
+                      <div className="text-sm opacity-75">~{lot.total_spaces} total spaces</div>
+                    )}
                   </div>
                 </div>
                 <Car className="w-8 h-8 opacity-50" />
@@ -112,67 +146,97 @@ export default function LotDetailSheet({ lot, isOpen, onClose, isFavorite, onTog
             </motion.div>
 
             {/* Event Restrictions */}
-            {eventMode && lot.event_restricted && (
+            {eventMode && (lot.event_restricted || lot.closed) && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="p-4 rounded-2xl bg-purple-50 border border-purple-200"
+                className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800"
               >
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-purple-600 mt-0.5" />
+                  <AlertTriangle className="w-5 h-5 text-purple-600 dark:text-purple-300 mt-0.5" />
                   <div>
-                    <div className="font-semibold text-purple-900">Event Mode Active</div>
-                    <div className="text-sm text-purple-700 mt-1">
-                      {lot.event_notes || 'Special restrictions may apply during events'}
+                    <div className="font-semibold text-purple-900 dark:text-purple-300">
+                      {lot.closed ? 'Closed for Event' : 'Event Mode Active'}
+                    </div>
+                    <div className="text-sm text-purple-700 dark:text-purple-300 mt-1">
+                      {lot.event_notes ||
+                        (lot.closed
+                          ? 'This lot is closed while the current event restrictions are active.'
+                          : 'Special restrictions may apply during events.')}
                     </div>
                   </div>
                 </div>
               </motion.div>
             )}
 
-            {/* Hourly Forecast */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-            >
-              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-500" />
-                Today's Forecast
-              </h3>
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {getHourlyForecast().map((item, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex-shrink-0 w-14 py-3 rounded-xl text-center ${
-                      item.isCurrent ? 'bg-gray-900 text-white' : 'bg-gray-100'
-                    }`}
-                  >
-                    <div className="text-xs font-medium mb-2">
-                      {item.isCurrent ? 'Now' : item.hour}
-                    </div>
-                    <div
-                      className={`w-3 h-3 rounded-full mx-auto ${getAvailabilityColor(item.status)}`}
-                    />
-                  </div>
-                ))}
+            {(lot.address || lot.location_notes || parkingCategories.includes('street')) && (
+              <div>
+                <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-muted-foreground" />
+                  Location
+                </h3>
+                {lot.address && <p className="text-sm text-foreground">{lot.address}</p>}
+                {lot.location_notes && (
+                  <p className="mt-1 text-sm text-muted-foreground">{lot.location_notes}</p>
+                )}
+                {parkingCategories.includes('street') && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    This entry covers designated curbside parking bays. Follow posted signs for the
+                    exact spaces.
+                  </p>
+                )}
               </div>
-            </motion.div>
+            )}
+
+            {/* Typical Availability */}
+            {hasAvailabilityPattern && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+              >
+                <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  Typical availability
+                </h3>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  This pattern is guidance, not a live count of open spaces.
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {getHourlyForecast().map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex-shrink-0 w-14 py-3 rounded-xl text-center ${
+                        item.isCurrent ? 'bg-gray-900 text-white' : 'bg-muted'
+                      }`}
+                    >
+                      <div className="text-xs font-medium mb-2">
+                        {item.isCurrent ? 'Now' : item.hour}
+                      </div>
+                      <div
+                        className="mx-auto h-3 w-3 rounded-full"
+                        style={{ backgroundColor: getAvailabilityMeta(item.status).color }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
 
             {/* Permits Required */}
-            {lot.required_permits?.length > 0 && (
+            {(lot.required_permits?.length > 0 || lot.permit_notes) && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-gray-500" />
+                <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-muted-foreground" />
                   Required Permits
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  {lot.required_permits.map((permit) => (
+                  {(lot.required_permits || []).map((permit) => (
                     <Badge
                       key={permit}
                       className="bg-gray-900 text-white hover:bg-gray-800 px-3 py-1.5"
@@ -181,6 +245,9 @@ export default function LotDetailSheet({ lot, isOpen, onClose, isFavorite, onTog
                     </Badge>
                   ))}
                 </div>
+                {lot.permit_notes && (
+                  <p className="mt-3 text-sm text-muted-foreground">{lot.permit_notes}</p>
+                )}
               </motion.div>
             )}
 
@@ -191,20 +258,15 @@ export default function LotDetailSheet({ lot, isOpen, onClose, isFavorite, onTog
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 }}
               >
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-500" />
+                <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
                   Time Rules
                 </h3>
                 <div className="space-y-2">
                   {lot.time_rules.map((rule, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 bg-gray-50 rounded-xl border border-gray-100"
-                    >
-                      <div className="text-sm font-medium text-gray-900">
-                        {rule.days}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">
+                    <div key={idx} className="p-3 bg-background rounded-xl border border-border">
+                      <div className="text-sm font-medium text-foreground">{rule.days}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
                         {rule.hours} — {rule.rule}
                       </div>
                     </div>
@@ -212,16 +274,62 @@ export default function LotDetailSheet({ lot, isOpen, onClose, isFavorite, onTog
                 </div>
               </motion.div>
             )}
+
+            {(lot.source_url || lot.verified_on) && (
+              <div className="border-t border-border pt-4 text-xs text-muted-foreground">
+                {lot.source_url && (
+                  <a
+                    href={lot.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(event) => {
+                      if (isNativeApp()) {
+                        event.preventDefault();
+                        void openExternalUrl(lot.source_url);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 font-medium text-foreground underline underline-offset-2"
+                  >
+                    {lot.source_label || 'Official parking information'}
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  </a>
+                )}
+                {lot.policy_urls?.map((url) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 block text-sm font-medium text-blue-700 dark:text-blue-300 underline underline-offset-2"
+                    onClick={(event) => {
+                      if (isNativeApp()) {
+                        event.preventDefault();
+                        void openExternalUrl(url);
+                      }
+                    }}
+                  >
+                    {url.includes('students')
+                      ? 'Student permit rules'
+                      : 'Faculty and staff permit rules'}
+                  </a>
+                ))}
+                {lot.verified_on && (
+                  <p className="mt-1">
+                    Checked <time dateTime={lot.verified_on}>{lot.verified_on}</time>
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Footer Actions */}
-          <div className="px-6 py-4 border-t border-gray-100 bg-white">
+          <div className="px-6 py-4 border-t border-border bg-card">
             <Button
-              className="w-full h-14 bg-[#CEB888] hover:bg-[#B8A06E] text-gray-900 font-semibold rounded-xl text-base"
-              onClick={() => {
-                const url = `https://www.google.com/maps/dir/?api=1&destination=${lot.latitude},${lot.longitude}`;
-                window.open(url, '_blank');
-              }}
+              className="w-full h-14 bg-[#CEB888] hover:bg-[#B8A06E] text-neutral-900 font-semibold rounded-xl text-base"
+              onClick={() => void openDirections(lot.latitude, lot.longitude, lot.name)}
+              disabled={
+                !Number.isFinite(Number(lot.latitude)) || !Number.isFinite(Number(lot.longitude))
+              }
             >
               <Navigation className="w-5 h-5 mr-2" />
               Get Directions

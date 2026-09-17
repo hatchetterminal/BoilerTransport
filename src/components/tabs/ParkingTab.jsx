@@ -1,308 +1,405 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
-import { motion } from 'framer-motion';
-import { MapPin, List, Star, RefreshCw } from 'lucide-react';
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  Building2,
+  CalendarDays,
+  CarFront,
+  CircleParking,
+  House,
+  List,
+  LocateFixed,
+  Map,
+  RotateCcw,
+  Route,
+  Star,
+  Ticket,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import ParkingMap from '../parking/ParkingMap';
+import ParkingListItem from '../parking/ParkingListItem';
 import LotDetailSheet from '../parking/LotDetailSheet';
 import SearchBar from '../common/SearchBar';
-import PullToRefresh from '../common/PullToRefresh';
 import { tabScrollRefs } from '../common/BottomNav';
-import { demoParkingLots } from '@/data/demoTransportData';
+import { ErrorState, LoadingState } from '../common/DataState';
+import { useParkingLots } from '@/hooks/useTransportData';
+import { decorateLotsForEvent, normalizeErrorMessage } from '@/lib/transport-utils';
+import {
+  PARKING_CATEGORY_OPTIONS,
+  PARKING_SORT_OPTIONS,
+  filterParkingLots,
+  getParkingCategories,
+  sortParkingLots,
+} from '@/lib/parking-utils';
+import { getCurrentCoordinates } from '@/lib/native-platform';
 
-export default function ParkingTab({ eventMode, activeEvent, userPrefs }) {
+const CATEGORY_ICONS = Object.freeze({
+  all: CarFront,
+  garage: Building2,
+  surface: CircleParking,
+  street: Route,
+  visitor: Ticket,
+  residential: House,
+  event: CalendarDays,
+});
+
+export default function ParkingTab({ eventMode, activeEvent, preferences, toggleFavorite }) {
   const [viewMode, setViewMode] = useState('map');
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [permitFilter, setPermitFilter] = useState('all');
-  const queryClient = useQueryClient();
+  const [sortBy, setSortBy] = useState('recommended');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [isLocating, setIsLocating] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const scrollRef = useRef(null);
+  const appliedDefaultPermit = useRef(false);
 
-  // Register scroll ref for BottomNav same-tab scroll-to-top
-  useEffect(() => { tabScrollRefs['parking'] = scrollRef; }, []);
+  useEffect(() => {
+    tabScrollRefs.parking = scrollRef;
+    return () => {
+      if (tabScrollRefs.parking === scrollRef) delete tabScrollRefs.parking;
+    };
+  }, []);
 
-  // Selected lot via URL search param ?lot=<id>
-  const params = new URLSearchParams(location.search);
+  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const selectedLotId = params.get('lot');
+  const { data: lots = [], isLoading, isError, error, refetch } = useParkingLots();
 
-  // Fetch parking lots
-  const { data: lots = demoParkingLots, isLoading, refetch } = useQuery({
-    queryKey: ['parkingLots'],
-    queryFn: async () => {
-      try {
-        const remoteLots = await base44.entities.ParkingLot.list();
-        return remoteLots?.length ? remoteLots : demoParkingLots;
-      } catch {
-        return demoParkingLots;
-      }
+  const lotsWithEventStatus = useMemo(
+    () => decorateLotsForEvent(lots, eventMode ? activeEvent : null),
+    [activeEvent, eventMode, lots],
+  );
+  const selectedLot = lotsWithEventStatus.find((lot) => lot.id === selectedLotId) || null;
+  const favoriteIds = useMemo(() => preferences?.favorite_lots || [], [preferences?.favorite_lots]);
+
+  const allPermits = useMemo(
+    () =>
+      [...new Set(lots.flatMap((lot) => lot.required_permits || []))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [lots],
+  );
+
+  useEffect(() => {
+    if (
+      !appliedDefaultPermit.current &&
+      preferences?.default_permit &&
+      allPermits.includes(preferences.default_permit)
+    ) {
+      setPermitFilter(preferences.default_permit);
+      appliedDefaultPermit.current = true;
+    }
+  }, [allPermits, preferences?.default_permit]);
+
+  const categoryCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        PARKING_CATEGORY_OPTIONS.map(({ value }) => [
+          value,
+          value === 'all'
+            ? lotsWithEventStatus.length
+            : lotsWithEventStatus.filter((lot) => getParkingCategories(lot).includes(value)).length,
+        ]),
+      ),
+    [lotsWithEventStatus],
+  );
+
+  const visibleLots = useMemo(() => {
+    const matching = filterParkingLots(lotsWithEventStatus, {
+      query: searchQuery,
+      category: categoryFilter,
+      permit: permitFilter,
+      favoritesOnly,
+      favoriteIds,
+    });
+    return sortParkingLots(matching, {
+      sortBy,
+      favoriteIds,
+      userLocation,
+    });
+  }, [
+    categoryFilter,
+    favoriteIds,
+    favoritesOnly,
+    lotsWithEventStatus,
+    permitFilter,
+    searchQuery,
+    sortBy,
+    userLocation,
+  ]);
+
+  const setSelectedLot = useCallback(
+    (lot, { replace = false } = {}) => {
+      if (lot) navigate(`/parking?lot=${encodeURIComponent(lot.id)}`, { replace });
+      else navigate('/parking', { replace });
     },
-    refetchInterval: 30000,
-    retry: false,
-  });
+    [navigate],
+  );
 
-  const selectedLot = lots.find(l => l.id === selectedLotId) || null;
-  const setSelectedLot = (lot) => {
-    if (lot) {
-      navigate(`/parking?lot=${lot.id}`, { replace: false });
-    } else {
-      navigate('/parking', { replace: false });
+  useEffect(() => {
+    if (!isLoading && selectedLotId && !visibleLots.some((lot) => lot.id === selectedLotId)) {
+      setSelectedLot(null, { replace: true });
+    }
+  }, [isLoading, selectedLotId, setSelectedLot, visibleLots]);
+
+  const toggleLotFavorite = (lotId) => toggleFavorite('favorite_lots', lotId);
+
+  const findNearbyParking = async () => {
+    setIsLocating(true);
+    try {
+      const coordinates = await getCurrentCoordinates();
+      setUserLocation(coordinates);
+      setSortBy('distance');
+      toast.success('Showing the nearest parking first');
+      return true;
+    } catch (locationError) {
+      toast.error(locationError?.message || 'Your location could not be determined');
+      return false;
+    } finally {
+      setIsLocating(false);
     }
   };
 
-  // Update lot with event restrictions
-  const lotsWithEventStatus = lots.map(lot => ({
-    ...lot,
-    event_restricted: eventMode && activeEvent?.restricted_lots?.includes(lot.code),
-    closed: eventMode && activeEvent?.closed_lots?.includes(lot.code),
-  }));
+  const handleSortChange = (value) => {
+    if (value === 'distance' && !userLocation) {
+      void findNearbyParking();
+      return;
+    }
+    setSortBy(value);
+  };
 
-  // Filter lots
-  const filteredLots = lotsWithEventStatus.filter(lot => {
-    const matchesSearch = lot.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         lot.code.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesPermit = permitFilter === 'all' || 
-                         lot.required_permits?.includes(permitFilter);
-    return matchesSearch && matchesPermit;
-  });
+  const toggleNearby = () => {
+    if (!userLocation) {
+      void findNearbyParking();
+      return;
+    }
+    setUserLocation(null);
+    if (sortBy === 'distance') setSortBy('recommended');
+  };
 
-  // Favorite lots
-  const favoriteIds = userPrefs?.favorite_lots || [];
+  const clearFilters = () => {
+    setSearchQuery('');
+    setCategoryFilter('all');
+    setPermitFilter('all');
+    setFavoritesOnly(false);
+    setSortBy('recommended');
+  };
 
-  const favoriteMutation = useMutation({
-    mutationFn: async (lotId) => {
-      const newFavorites = favoriteIds.includes(lotId)
-        ? favoriteIds.filter(id => id !== lotId)
-        : [...favoriteIds, lotId];
-      if (userPrefs?.id) {
-        return base44.entities.UserPreferences.update(userPrefs.id, { favorite_lots: newFavorites });
-      } else {
-        const user = await base44.auth.me();
-        return base44.entities.UserPreferences.create({ user_email: user.email, favorite_lots: newFavorites });
-      }
-    },
-    onMutate: async (lotId) => {
-      await queryClient.cancelQueries({ queryKey: ['preferences'] });
-      const prev = queryClient.getQueryData(['preferences', userPrefs?.user_email]);
-      const newFavorites = favoriteIds.includes(lotId)
-        ? favoriteIds.filter(id => id !== lotId)
-        : [...favoriteIds, lotId];
-      queryClient.setQueryData(['preferences', userPrefs?.user_email], (old) =>
-        old ? [{ ...old[0], favorite_lots: newFavorites }] : old
-      );
-      return { prev };
-    },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['preferences', userPrefs?.user_email], ctx.prev);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['preferences'] }),
-  });
-
-  const toggleFavorite = (lotId) => favoriteMutation.mutate(lotId);
-
-  const currentHour = new Date().getHours();
-  const getAvailability = (lot) => lot.availability_pattern?.[currentHour] || 'open';
-
-  // Get unique permits
-  const allPermits = [...new Set(lots.flatMap(lot => lot.required_permits || []))];
+  const activeFilterCount =
+    Number(Boolean(searchQuery.trim())) +
+    Number(categoryFilter !== 'all') +
+    Number(permitFilter !== 'all') +
+    Number(favoritesOnly);
+  const sortLabel =
+    PARKING_SORT_OPTIONS.find((option) => option.value === sortBy)?.label || 'Recommended';
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)]">
-      {/* Search & Filters */}
-      <div className="px-4 py-3 space-y-3">
+    <div className="flex h-[calc(100dvh-180px)] min-h-[500px] flex-col">
+      <section className="space-y-3 px-4 pb-3 pt-2" aria-label="Parking search and filters">
         <SearchBar
           value={searchQuery}
           onChange={setSearchQuery}
-          placeholder="Search parking lots..."
+          placeholder="Search lots, garages, streets, or permits"
         />
-        
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <Badge
-            variant={permitFilter === 'all' ? 'default' : 'outline'}
-            className={`cursor-pointer whitespace-nowrap ${
-              permitFilter === 'all' ? 'bg-gray-900' : ''
-            }`}
-            onClick={() => setPermitFilter('all')}
-          >
-            All Permits
-          </Badge>
-          {allPermits.map(permit => (
-            <Badge
-              key={permit}
-              variant={permitFilter === permit ? 'default' : 'outline'}
-              className={`cursor-pointer whitespace-nowrap ${
-                permitFilter === permit ? 'bg-gray-900' : ''
-              }`}
-              onClick={() => setPermitFilter(permit)}
-            >
-              {permit}
-            </Badge>
-          ))}
+
+        <div
+          className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1"
+          role="group"
+          aria-label="Parking type"
+        >
+          {PARKING_CATEGORY_OPTIONS.map(({ value, label }) => {
+            const Icon = CATEGORY_ICONS[value];
+            const isActive = categoryFilter === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setCategoryFilter(value)}
+                className={`flex h-9 flex-shrink-0 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                  isActive
+                    ? 'border-gray-900 dark:border-[#CEB888] bg-gray-900 text-white'
+                    : 'border-border bg-card text-muted-foreground hover:border-border'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                {label}
+                <span className={isActive ? 'text-gray-300' : 'text-muted-foreground'}>
+                  {categoryCounts[value]}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* View Toggle */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <Tabs value={viewMode} onValueChange={setViewMode}>
-            <TabsList className="bg-gray-100">
-              <TabsTrigger value="map" className="gap-1.5">
-                <MapPin className="w-4 h-4" /> Map
+            <TabsList className="h-9 bg-muted p-1">
+              <TabsTrigger value="map" className="h-7 gap-1.5 px-3 text-xs">
+                <Map className="h-3.5 w-3.5" aria-hidden="true" /> Map
               </TabsTrigger>
-              <TabsTrigger value="list" className="gap-1.5">
-                <List className="w-4 h-4" /> List
+              <TabsTrigger value="list" className="h-7 gap-1.5 px-3 text-xs">
+                <List className="h-3.5 w-3.5" aria-hidden="true" /> List
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => refetch()}
-            className="text-gray-500"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
 
-      {/* Content */}
-      <div className="flex-1 px-4 pb-4">
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant={favoritesOnly ? 'secondary' : 'outline'}
+              size="sm"
+              className="h-9 gap-1.5 px-2.5"
+              onClick={() => setFavoritesOnly((value) => !value)}
+              aria-pressed={favoritesOnly}
+              aria-label="Show favorite parking only"
+            >
+              <Star className={`h-4 w-4 ${favoritesOnly ? 'fill-amber-400 text-amber-500' : ''}`} />
+              <span className="hidden sm:inline">Favorites</span>
+            </Button>
+            <Button
+              type="button"
+              variant={userLocation ? 'secondary' : 'outline'}
+              size="sm"
+              className="h-9 gap-1.5 px-2.5"
+              onClick={toggleNearby}
+              disabled={isLocating}
+              aria-pressed={Boolean(userLocation)}
+            >
+              <LocateFixed
+                className={`h-4 w-4 ${isLocating ? 'animate-pulse' : ''}`}
+                aria-hidden="true"
+              />
+              <span>{userLocation ? 'Nearby on' : 'Near me'}</span>
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={permitFilter} onValueChange={setPermitFilter}>
+            <SelectTrigger
+              className="h-9 rounded-xl border-border bg-card text-xs"
+              aria-label="Filter by permit"
+            >
+              <SelectValue placeholder="Any permit" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any permit</SelectItem>
+              {allPermits.map((permit) => (
+                <SelectItem key={permit} value={permit}>
+                  {permit}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={sortBy} onValueChange={handleSortChange}>
+            <SelectTrigger
+              className="h-9 rounded-xl border-border bg-card text-xs"
+              aria-label="Sort parking"
+            >
+              <SelectValue placeholder="Sort parking" />
+            </SelectTrigger>
+            <SelectContent>
+              {PARKING_SORT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex min-h-6 items-center justify-between gap-3 text-xs text-muted-foreground">
+          <span>
+            <strong className="font-semibold text-foreground">{visibleLots.length}</strong> of{' '}
+            {lotsWithEventStatus.length} places · {sortLabel}
+          </span>
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center gap-1 font-semibold text-foreground hover:text-foreground"
+            >
+              <RotateCcw className="h-3 w-3" aria-hidden="true" />
+              Clear {activeFilterCount}
+            </button>
+          )}
+        </div>
+      </section>
+
+      <div className="min-h-0 flex-1 px-4 pb-4">
         {isLoading ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <RefreshCw className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">Loading parking data...</p>
-            </div>
+          <LoadingState message="Loading parking data…" />
+        ) : isError ? (
+          <ErrorState
+            message={normalizeErrorMessage(error, 'Unable to load parking data')}
+            onRetry={refetch}
+          />
+        ) : visibleLots.length === 0 ? (
+          <div className="flex h-full min-h-[260px] flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-card px-8 text-center">
+            <CircleParking className="mb-3 h-9 w-9 text-muted-foreground/60" aria-hidden="true" />
+            <h2 className="font-semibold text-foreground">No parking matches those filters</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Try another parking type or clear your permit and search filters.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4 rounded-xl"
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
           </div>
         ) : viewMode === 'map' ? (
           <ParkingMap
-            lots={filteredLots}
+            lots={visibleLots}
             selectedLot={selectedLot}
             onSelectLot={setSelectedLot}
             eventMode={eventMode}
             favoriteIds={favoriteIds}
-            onToggleFavorite={toggleFavorite}
+            userLocation={userLocation}
           />
         ) : (
-          <PullToRefresh onRefresh={refetch}>
-          <div ref={scrollRef} className="space-y-3 pt-2" style={{ WebkitOverflowScrolling: 'touch' }}>
-            {/* Favorites Section */}
-            {favoriteIds.length > 0 && (
-              <div className="mb-4">
-                <h3 className="text-sm font-semibold text-gray-500 mb-2 flex items-center gap-1">
-                  <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  Favorites
-                </h3>
-                {filteredLots
-                  .filter(lot => favoriteIds.includes(lot.id))
-                  .map(lot => (
-                    <LotListItem
-                      key={lot.id}
-                      lot={lot}
-                      availability={getAvailability(lot)}
-                      isFavorite={true}
-                      onSelect={() => setSelectedLot(lot)}
-                      onToggleFavorite={() => toggleFavorite(lot.id)}
-                      eventMode={eventMode}
-                    />
-                  ))}
-              </div>
-            )}
-
-            {/* All Lots */}
-            <h3 className="text-sm font-semibold text-gray-500 mb-2">
-              All Lots ({filteredLots.length})
-            </h3>
-            {filteredLots.map(lot => (
-              <LotListItem
+          <div
+            ref={scrollRef}
+            className="h-full space-y-2.5 overflow-y-auto pb-3"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {visibleLots.map((lot) => (
+              <ParkingListItem
                 key={lot.id}
                 lot={lot}
-                availability={getAvailability(lot)}
                 isFavorite={favoriteIds.includes(lot.id)}
                 onSelect={() => setSelectedLot(lot)}
-                onToggleFavorite={() => toggleFavorite(lot.id)}
+                onToggleFavorite={() => toggleLotFavorite(lot.id)}
                 eventMode={eventMode}
               />
             ))}
           </div>
-          </PullToRefresh>
         )}
       </div>
 
-      {/* Lot Detail Sheet */}
       <LotDetailSheet
         lot={selectedLot}
-        isOpen={!!selectedLot}
+        isOpen={Boolean(selectedLot)}
         onClose={() => setSelectedLot(null)}
         isFavorite={favoriteIds.includes(selectedLot?.id)}
-        onToggleFavorite={toggleFavorite}
+        onToggleFavorite={toggleLotFavorite}
         eventMode={eventMode}
       />
     </div>
-  );
-}
-
-function LotListItem({ lot, availability, isFavorite, onSelect, onToggleFavorite, eventMode }) {
-  const getAvailabilityColor = (status) => {
-    switch (status) {
-      case 'open': return 'bg-green-500';
-      case 'half': return 'bg-amber-500';
-      case 'full': return 'bg-red-500';
-      default: return 'bg-gray-400';
-    }
-  };
-
-  const isRestricted = eventMode && (lot.event_restricted || lot.closed);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      onClick={onSelect}
-      className={`
-        p-4 bg-white rounded-2xl border-2 cursor-pointer transition-all
-        ${isRestricted ? 'border-purple-200 bg-purple-50' : 'border-gray-100 hover:border-gray-200'}
-      `}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`w-4 h-4 rounded-full ${
-            isRestricted ? 'bg-purple-500' : getAvailabilityColor(availability)
-          }`} />
-          <div>
-            <div className="font-semibold text-gray-900">{lot.name}</div>
-            <div className="text-sm text-gray-500">
-              Lot {lot.code}
-              {lot.required_permits?.length > 0 && (
-                <span> • {lot.required_permits.join(', ')}</span>
-              )}
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onToggleFavorite();
-          }}
-          className="p-2 relative z-10"
-        >
-          <Star
-            className={`w-5 h-5 ${
-              isFavorite ? 'fill-amber-400 text-amber-400' : 'text-gray-300'
-            }`}
-          />
-        </button>
-      </div>
-      {isRestricted && (
-        <Badge className="mt-2 bg-purple-100 text-purple-700 border-0">
-          Event Restricted
-        </Badge>
-      )}
-    </motion.div>
   );
 }

@@ -1,96 +1,100 @@
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, X, Calendar, Car, Bus, AlertTriangle, CheckCircle } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertTriangle, Bell, Calendar, CheckCircle, X } from 'lucide-react';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 
-const MOCK_NOTIFICATIONS = [
-  {
-    id: '1',
-    type: 'event',
-    title: 'Event Mode Active',
-    message: 'Parking restrictions are now in effect for today\'s game. Check alternative lots.',
-    time: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    read: false,
-  },
-  {
-    id: '2',
-    type: 'parking',
-    title: 'Lot A Near Capacity',
-    message: 'Lot A is now 90% full. Consider Lot C or the North Garage.',
-    time: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'bus',
-    title: 'Gold Route Delay',
-    message: 'Gold Route buses are running 8 minutes late due to traffic near Stadium Ave.',
-    time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
-  {
-    id: '4',
-    type: 'event',
-    title: 'Upcoming: Men\'s Basketball',
-    message: 'Basketball game tomorrow at Mackey Arena. Event parking begins at 5:00 PM.',
-    time: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
-  {
-    id: '5',
-    type: 'parking',
-    title: 'Parking Permit Reminder',
-    message: 'Permit enforcement begins at 7:30 AM on weekdays. Ensure your permit is displayed.',
-    time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
-  {
-    id: '6',
-    type: 'bus',
-    title: 'Weekend Schedule Active',
-    message: 'Bus routes are now running on weekend frequency. Some routes may have reduced service.',
-    time: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-  },
-];
-
 const TYPE_CONFIG = {
-  event: { icon: Calendar, color: 'text-[#CEB888]', bg: 'bg-amber-50' },
-  parking: { icon: Car, color: 'text-blue-500', bg: 'bg-blue-50' },
-  bus: { icon: Bus, color: 'text-green-500', bg: 'bg-green-50' },
-  alert: { icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50' },
+  event: {
+    icon: Calendar,
+    color: 'text-amber-700 dark:text-amber-300',
+    bg: 'bg-amber-50 dark:bg-amber-950/50',
+  },
+  alert: {
+    icon: AlertTriangle,
+    color: 'text-red-600 dark:text-red-300',
+    bg: 'bg-red-50 dark:bg-red-950/50',
+  },
 };
+
+function buildNotifications(activeEvent, eventAlertsEnabled) {
+  const notifications = [];
+
+  if (activeEvent && eventAlertsEnabled) {
+    const restrictions = [
+      ...(activeEvent.closed_lots || []),
+      ...(activeEvent.restricted_lots || []),
+    ];
+    notifications.push({
+      id: `active-event-${activeEvent.id}`,
+      type: 'event',
+      title: `${activeEvent.title || activeEvent.name || 'Campus event'} is active`,
+      message:
+        restrictions.length > 0
+          ? `Parking changes affect ${restrictions.join(', ')}. Open the event details for alternatives.`
+          : 'Special parking or transportation rules may be in effect.',
+      time: activeEvent.start_time || new Date().toISOString(),
+    });
+  }
+
+  return notifications;
+}
 
 function formatTime(isoString) {
   const date = parseISO(isoString);
+  if (Number.isNaN(date.getTime())) return '';
   if (isToday(date)) return format(date, 'h:mm a');
   if (isYesterday(date)) return 'Yesterday';
   return format(date, 'MMM d');
 }
 
-export default function NotificationCenter({ isOpen, onClose, onUnreadCountChange }) {
-  const [notifications, setNotifications] = React.useState(MOCK_NOTIFICATIONS);
+export default function NotificationCenter({
+  isOpen,
+  onClose,
+  onUnreadCountChange,
+  activeEvent,
+  eventAlertsEnabled = true,
+}) {
+  const [readIds, setReadIds] = useState(() => new Set());
+  const [dismissedIds, setDismissedIds] = useState(() => new Set());
+  const notifications = useMemo(
+    () =>
+      buildNotifications(activeEvent, eventAlertsEnabled).filter(
+        (notification) => !dismissedIds.has(notification.id),
+      ),
+    [activeEvent, dismissedIds, eventAlertsEnabled],
+  );
+  const unreadCount = notifications.filter((notification) => !readIds.has(notification.id)).length;
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  React.useEffect(() => {
+  useEffect(() => {
     onUnreadCountChange?.(unreadCount);
-  }, [unreadCount]);
+  }, [onUnreadCountChange, unreadCount]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setReadIds(
+      (previous) => new Set([...previous, ...notifications.map((notification) => notification.id)]),
+    );
   };
 
   const dismiss = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setDismissedIds((previous) => new Set(previous).add(id));
   };
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
-          <motion.div
+          <motion.button
+            type="button"
+            aria-label="Dismiss notifications"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -98,19 +102,27 @@ export default function NotificationCenter({ isOpen, onClose, onUnreadCountChang
             onClick={onClose}
           />
 
-          {/* Panel */}
-          <motion.div
+          <motion.section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="notifications-title"
             initial={{ opacity: 0, y: -10, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.97 }}
             transition={{ duration: 0.2 }}
-            className="fixed top-[68px] right-3 left-3 sm:left-auto sm:w-96 z-[10000] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden max-h-[75vh] flex flex-col"
+            className="fixed right-3 left-3 sm:left-auto sm:w-96 z-[10000] bg-card rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col"
+            style={{
+              top: 'var(--notification-top)',
+              maxHeight:
+                'min(75vh, calc(100vh - var(--notification-top) - env(safe-area-inset-bottom, 0px) - 16px))',
+            }}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div className="flex items-center gap-2">
-                <Bell className="w-4 h-4 text-gray-700" />
-                <span className="font-bold text-gray-900">Notifications</span>
+                <Bell className="w-4 h-4 text-foreground" aria-hidden="true" />
+                <h2 id="notifications-title" className="font-bold text-foreground">
+                  Notifications
+                </h2>
                 {unreadCount > 0 && (
                   <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
                     {unreadCount}
@@ -120,62 +132,88 @@ export default function NotificationCenter({ isOpen, onClose, onUnreadCountChang
               <div className="flex items-center gap-2">
                 {unreadCount > 0 && (
                   <button
+                    type="button"
                     onClick={markAllRead}
-                    className="text-xs text-[#CEB888] font-semibold hover:text-[#B8A06E]"
+                    className="text-xs text-amber-700 dark:text-amber-300 font-semibold hover:text-amber-800 dark:hover:text-amber-300"
                   >
                     Mark all read
                   </button>
                 )}
-                <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
-                  <X className="w-4 h-4 text-gray-500" />
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1 hover:bg-muted rounded-lg"
+                  aria-label="Close notifications"
+                >
+                  <X className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
-            {/* Notification List */}
             <div className="overflow-y-auto flex-1">
               {notifications.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                  <CheckCircle className="w-8 h-8 mb-2 text-gray-300" />
-                  <p className="text-sm">You're all caught up!</p>
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <CheckCircle
+                    className="w-8 h-8 mb-2 text-muted-foreground/60"
+                    aria-hidden="true"
+                  />
+                  <p className="text-sm">You&apos;re all caught up.</p>
                 </div>
               ) : (
-                notifications.map((notif) => {
-                  const config = TYPE_CONFIG[notif.type] || TYPE_CONFIG.alert;
+                notifications.map((notification) => {
+                  const config = TYPE_CONFIG[notification.type] || TYPE_CONFIG.alert;
                   const Icon = config.icon;
+                  const isRead = readIds.has(notification.id);
                   return (
-                    <div
-                      key={notif.id}
-                      className={`flex items-start gap-3 px-4 py-3 border-b border-gray-50 last:border-0 ${
-                        !notif.read ? 'bg-amber-50/40' : 'bg-white'
+                    <article
+                      key={notification.id}
+                      className={`group flex items-start gap-3 px-4 py-3 border-b border-border last:border-0 ${
+                        isRead ? 'bg-card' : 'bg-amber-50/40 dark:bg-amber-950/50'
                       }`}
                     >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${config.bg}`}>
-                        <Icon className={`w-4 h-4 ${config.color}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className={`text-sm font-semibold ${!notif.read ? 'text-gray-900' : 'text-gray-700'}`}>
-                            {notif.title}
-                          </p>
-                          <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
-                            {formatTime(notif.time)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{notif.message}</p>
+                      <div
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${config.bg}`}
+                      >
+                        <Icon className={`w-4 h-4 ${config.color}`} aria-hidden="true" />
                       </div>
                       <button
-                        onClick={() => dismiss(notif.id)}
-                        className="p-1 hover:bg-gray-100 rounded-lg flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100"
+                        type="button"
+                        onClick={() =>
+                          setReadIds((previous) => new Set(previous).add(notification.id))
+                        }
+                        className="flex-1 min-w-0 text-left"
+                        aria-label={
+                          isRead
+                            ? `${notification.title}, read`
+                            : `${notification.title}, mark as read`
+                        }
                       >
-                        <X className="w-3.5 h-3.5 text-gray-400" />
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-semibold text-foreground">
+                            {notification.title}
+                          </span>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                            {formatTime(notification.time)}
+                          </span>
+                        </div>
+                        <span className="block text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                          {notification.message}
+                        </span>
                       </button>
-                    </div>
+                      <button
+                        type="button"
+                        onClick={() => dismiss(notification.id)}
+                        className="p-1 hover:bg-muted rounded-lg flex-shrink-0 mt-0.5 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                        aria-label={`Dismiss ${notification.title}`}
+                      >
+                        <X className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+                      </button>
+                    </article>
                   );
                 })
               )}
             </div>
-          </motion.div>
+          </motion.section>
         </>
       )}
     </AnimatePresence>

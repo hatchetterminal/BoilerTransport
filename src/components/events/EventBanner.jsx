@@ -1,25 +1,24 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Badge } from "@/components/ui/badge";
+import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, MapPin, Clock, ChevronRight, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatEventDate, formatEventTime } from '@/lib/event-utils';
 
 export default function EventBanner({ event, isExpanded, onToggle, onDismiss }) {
   if (!event) return null;
 
-  const startTime = new Date(event.start_time);
-  const endTime = new Date(event.end_time);
-  const now = new Date();
-  const isOngoing = now >= startTime && now <= endTime;
-  const isUpcoming = now < startTime;
-
   const getEventTypeColor = (type) => {
     switch (type) {
-      case 'football': return 'bg-[#CEB888]';
-      case 'basketball': return 'bg-orange-500';
-      case 'concert': return 'bg-purple-500';
-      case 'graduation': return 'bg-blue-500';
-      default: return 'bg-gray-700';
+      case 'football':
+        return 'bg-[#8E6F3E]';
+      case 'basketball':
+        return 'bg-orange-500';
+      case 'concert':
+        return 'bg-purple-500';
+      case 'graduation':
+        return 'bg-blue-500';
+      default:
+        return 'bg-gray-700';
     }
   };
 
@@ -32,15 +31,20 @@ export default function EventBanner({ event, isExpanded, onToggle, onDismiss }) 
         className="relative"
       >
         <div
-          onClick={onToggle}
           className={`
             ${getEventTypeColor(event.event_type)} 
-            rounded-2xl overflow-hidden cursor-pointer
+            relative rounded-2xl overflow-hidden
             transition-all duration-300
           `}
         >
           {/* Main Banner */}
-          <div className="p-4 text-white">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={isExpanded}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} details for ${event.title}`}
+            className="block w-full p-4 pr-12 text-left text-white"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
@@ -48,10 +52,8 @@ export default function EventBanner({ event, isExpanded, onToggle, onDismiss }) 
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge 
-                      className="bg-white/20 text-white hover:bg-white/30 border-0"
-                    >
-                      {isOngoing ? 'HAPPENING NOW' : 'UPCOMING EVENT'}
+                    <Badge className="bg-white/20 text-white hover:bg-white/30 border-0">
+                      GAME DAY
                     </Badge>
                   </div>
                   <h3 className="font-bold text-lg">{event.title}</h3>
@@ -61,25 +63,25 @@ export default function EventBanner({ event, isExpanded, onToggle, onDismiss }) 
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2">
-                <ChevronRight 
-                  className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
+                <ChevronRight
+                  className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                 />
-                {onDismiss && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDismiss();
-                    }}
-                    className="p-1 hover:bg-white/10 rounded-lg"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
               </div>
             </div>
-          </div>
+          </button>
+
+          {onDismiss && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="absolute top-3 right-3 p-2 text-white hover:bg-white/10 rounded-lg"
+              aria-label={`Dismiss ${event.title}`}
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
 
           {/* Expanded Content */}
           <AnimatePresence>
@@ -95,7 +97,7 @@ export default function EventBanner({ event, isExpanded, onToggle, onDismiss }) 
                   <div className="flex items-center gap-2 text-white/90">
                     <Clock className="w-4 h-4" />
                     <span className="text-sm">
-                      {format(startTime, 'MMM d, h:mm a')} - {format(endTime, 'h:mm a')}
+                      {formatEventDate(event.date)} · {formatEventTime(event)}
                     </span>
                   </div>
 
@@ -105,10 +107,7 @@ export default function EventBanner({ event, isExpanded, onToggle, onDismiss }) 
                       <div className="text-sm font-medium text-white/70 mb-2">Closed Lots</div>
                       <div className="flex flex-wrap gap-2">
                         {event.closed_lots.map((lot) => (
-                          <Badge 
-                            key={lot} 
-                            className="bg-red-500/30 text-white border-0"
-                          >
+                          <Badge key={lot} className="bg-red-500/30 text-white border-0">
                             {lot}
                           </Badge>
                         ))}
@@ -119,13 +118,12 @@ export default function EventBanner({ event, isExpanded, onToggle, onDismiss }) 
                   {/* Restricted Lots */}
                   {event.restricted_lots?.length > 0 && (
                     <div>
-                      <div className="text-sm font-medium text-white/70 mb-2">Restricted Access</div>
+                      <div className="text-sm font-medium text-white/70 mb-2">
+                        Restricted Access
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {event.restricted_lots.map((lot) => (
-                          <Badge 
-                            key={lot} 
-                            className="bg-yellow-500/30 text-white border-0"
-                          >
+                          <Badge key={lot} className="bg-yellow-500/30 text-white border-0">
                             {lot}
                           </Badge>
                         ))}
@@ -141,10 +139,7 @@ export default function EventBanner({ event, isExpanded, onToggle, onDismiss }) 
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {event.alternative_lots.map((lot) => (
-                          <Badge 
-                            key={lot} 
-                            className="bg-green-500/30 text-white border-0"
-                          >
+                          <Badge key={lot} className="bg-green-500/30 text-white border-0">
                             ✓ {lot}
                           </Badge>
                         ))}
@@ -167,10 +162,7 @@ export default function EventBanner({ event, isExpanded, onToggle, onDismiss }) 
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {event.shuttle_routes.map((route) => (
-                          <Badge 
-                            key={route} 
-                            className="bg-white/20 text-white border-0"
-                          >
+                          <Badge key={route} className="bg-white/20 text-white border-0">
                             🚌 {route}
                           </Badge>
                         ))}

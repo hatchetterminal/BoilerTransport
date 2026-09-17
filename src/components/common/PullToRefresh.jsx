@@ -27,8 +27,11 @@ export default function PullToRefresh({ onRefresh, children }) {
     if (pullDistance >= THRESHOLD && !refreshing) {
       setRefreshing(true);
       setPullDistance(THRESHOLD);
-      await onRefresh();
-      setRefreshing(false);
+      try {
+        await onRefresh();
+      } finally {
+        setRefreshing(false);
+      }
     }
     setPullDistance(0);
     startY.current = null;
@@ -45,7 +48,7 @@ export default function PullToRefresh({ onRefresh, children }) {
           style={{ height: refreshing ? THRESHOLD : pullDistance }}
         >
           <RefreshCw
-            className={`w-5 h-5 text-gray-400 transition-transform ${refreshing ? 'animate-spin' : ''}`}
+            className={`w-5 h-5 text-muted-foreground transition-transform ${refreshing ? 'animate-spin' : ''}`}
             style={{ transform: `rotate(${progress * 360}deg)` }}
           />
         </div>
@@ -54,7 +57,11 @@ export default function PullToRefresh({ onRefresh, children }) {
       <div
         ref={containerRef}
         className="h-full overflow-y-auto"
-        style={{ transform: `translateY(${refreshing ? THRESHOLD : pullDistance}px)`, transition: refreshing || pullDistance === 0 ? 'transform 0.2s' : 'none', WebkitOverflowScrolling: 'touch' }}
+        style={{
+          transform: `translateY(${refreshing ? THRESHOLD : pullDistance}px)`,
+          transition: refreshing || pullDistance === 0 ? 'transform 0.2s' : 'none',
+          WebkitOverflowScrolling: 'touch',
+        }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+ios/
+package-lock.json
+# Importers own the formatting of these source snapshots.
+src/data/purdueParkingSource.js
+src/data/purdueEventsSource.js

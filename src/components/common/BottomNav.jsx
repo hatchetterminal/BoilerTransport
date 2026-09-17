@@ -20,9 +20,9 @@ export default function BottomNav() {
   const activeTab = getActiveTabFromPath(location.pathname);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 select-none">
+    <div className="fixed bottom-0 left-0 right-0 z-[1100] select-none">
       <div
-        className="bg-white/90 backdrop-blur-xl border-t border-gray-100 px-4 pt-2"
+        className="bg-card/90 backdrop-blur-xl border-t border-border px-4 pt-2"
         style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
       >
         <div className="flex items-center justify-around max-w-md mx-auto">
@@ -32,6 +32,7 @@ export default function BottomNav() {
 
             return (
               <button
+                type="button"
                 key={tab.id}
                 onClick={() => {
                   if (activeTab === tab.id) {
@@ -43,22 +44,25 @@ export default function BottomNav() {
                   }
                 }}
                 className="relative flex flex-col items-center py-2 px-4 min-w-[64px] select-none"
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={`${tab.label}${isActive ? ', current section' : ''}`}
               >
                 {isActive && (
                   <motion.div
                     layoutId="activeTab"
                     className="absolute -top-1 w-12 h-1 bg-[#CEB888] rounded-full"
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                   />
                 )}
                 <Icon
                   className={`w-6 h-6 transition-colors ${
-                    isActive ? 'text-[#CEB888]' : 'text-gray-400'
+                    isActive ? 'text-[#CEB888]' : 'text-muted-foreground'
                   }`}
+                  aria-hidden="true"
                 />
                 <span
                   className={`text-xs mt-1 font-medium transition-colors ${
-                    isActive ? 'text-gray-900' : 'text-gray-400'
+                    isActive ? 'text-foreground' : 'text-muted-foreground'
                   }`}
                 >
                   {tab.label}

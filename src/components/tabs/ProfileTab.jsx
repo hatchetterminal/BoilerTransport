@@ -1,214 +1,206 @@
-import React from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { 
-  Bell, BellOff, Star, Shield,
-  ChevronRight, LogOut, HelpCircle, Trash2
-} from 'lucide-react';
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Link } from 'react-router-dom';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
+  Bell,
+  BellOff,
+  ChevronRight,
+  FileText,
+  HelpCircle,
+  Info,
+  Shield,
+  SlidersHorizontal,
+  Star,
+  Trash2,
+  Sun,
+  Moon,
+  Smartphone,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { APP_CONFIG } from '@/lib/app-config';
 
-const PERMIT_TYPES = ['A', 'B', 'C', 'Garage', 'Residence Hall', 'Visitor'];
+const PERMIT_TYPES = ['A', 'B', 'C', 'Student Garage', 'Residence Hall', 'Visitor/Paid', 'Value'];
 
-export default function ProfileTab({ userPrefs }) {
-  const queryClient = useQueryClient();
-
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      try {
-        return await base44.auth.me();
-      } catch {
-        return null;
-      }
-    },
-    retry: false,
-  });
-
-  const updatePrefsMutation = useMutation({
-    mutationFn: (data) => {
-      if (userPrefs?.id) {
-        return base44.entities.UserPreferences.update(userPrefs.id, data);
-      } else if (user?.email) {
-        return base44.entities.UserPreferences.create({
-          user_email: user.email,
-          ...data
-        });
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['preferences'] });
-      toast.success('Settings saved');
-    },
-  });
-
-  const handleToggle = async (field, value) => {
-    if (userPrefs?.id) {
-      updatePrefsMutation.mutate({ [field]: value });
-    } else if (user?.email) {
-      // Create new preferences if none exist
-      updatePrefsMutation.mutate({ 
-        user_email: user.email,
-        [field]: value 
-      });
-    }
-  };
-
-  const handleLogout = () => {
-    base44.auth.logout();
-  };
-
-  const handleDeleteAccount = async () => {
+export default function ProfileTab({
+  preferences,
+  isSavingPreferences,
+  updatePreferences,
+  removePreferences,
+}) {
+  const handleRemoveData = async () => {
     try {
-      await base44.auth.logout();
-      toast.success('Account deletion requested. Contact support to complete removal.');
+      await removePreferences();
     } catch {
-      toast.error('Something went wrong. Please contact support.');
+      toast.error('Saved app data could not be removed');
     }
   };
 
   return (
-    <div className="px-4 py-3 pb-24 overflow-y-auto h-[calc(100vh-150px)]" style={{ WebkitOverflowScrolling: 'touch' }}>
-      {/* Profile Header */}
+    <div
+      className="px-4 py-3 pb-24 overflow-y-auto h-[calc(100vh-150px)]"
+      style={{ WebkitOverflowScrolling: 'touch' }}
+    >
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center gap-4 mb-6"
       >
-        <div className="w-16 h-16 bg-[#CEB888] rounded-2xl flex items-center justify-center">
-          <span className="text-2xl font-bold text-gray-900">
-            {user?.full_name?.[0]?.toUpperCase() || 'P'}
-          </span>
+        <div
+          className="w-16 h-16 bg-[#CEB888] rounded-2xl flex items-center justify-center"
+          aria-hidden="true"
+        >
+          <SlidersHorizontal className="w-7 h-7 text-neutral-900" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-gray-900">
-            {user?.full_name || 'Boilermaker'}
-          </h2>
-          <p className="text-sm text-gray-500">{user?.email}</p>
+          <h2 className="text-xl font-bold text-foreground">Your Preferences</h2>
+          <p className="text-sm text-muted-foreground">Saved only on this device</p>
         </div>
       </motion.div>
 
-      {/* Quick Stats */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="grid grid-cols-2 gap-3 mb-6"
       >
-        <Card className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 border-0">
-          <Star className="w-5 h-5 text-amber-600 mb-2" />
-          <div className="text-2xl font-bold text-gray-900">
-            {(userPrefs?.favorite_routes?.length || 0) + (userPrefs?.favorite_lots?.length || 0)}
+        <Card className="p-4 bg-gradient-to-br from-amber-50 dark:from-amber-950/50 to-amber-100 dark:to-amber-950/50 border-0">
+          <Star className="w-5 h-5 text-amber-600 dark:text-amber-300 mb-2" aria-hidden="true" />
+          <div className="text-2xl font-bold text-foreground">
+            {(preferences.favorite_routes?.length || 0) + (preferences.favorite_lots?.length || 0)}
           </div>
-          <div className="text-sm text-gray-600">Favorites</div>
+          <div className="text-sm text-muted-foreground">Favorites</div>
         </Card>
-        <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-0">
-          <Shield className="w-5 h-5 text-blue-600 mb-2" />
-          <div className="text-2xl font-bold text-gray-900">
-            {userPrefs?.default_permit || '—'}
+        <Card className="p-4 bg-gradient-to-br from-blue-50 dark:from-blue-950/50 to-blue-100 dark:to-blue-950/50 border-0">
+          <Shield className="w-5 h-5 text-blue-600 dark:text-blue-300 mb-2" aria-hidden="true" />
+          <div className="text-2xl font-bold text-foreground">
+            {preferences.default_permit || '—'}
           </div>
-          <div className="text-sm text-gray-600">Permit</div>
+          <div className="text-sm text-muted-foreground">Permit</div>
         </Card>
       </motion.div>
 
-      {/* Settings */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
         className="space-y-4"
       >
-        <h3 className="font-semibold text-gray-700">Settings</h3>
+        <h3 className="font-semibold text-foreground">Settings</h3>
 
-        {/* Notifications */}
         <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
-                <Bell className="w-5 h-5 text-gray-600" />
-              </div>
-              <div>
-                <div className="font-medium text-gray-900">Notifications</div>
-                <div className="text-sm text-gray-500">Receive alerts and updates</div>
-              </div>
-            </div>
-            <Switch
-              checked={userPrefs?.notifications_enabled ?? true}
-              onCheckedChange={(v) => handleToggle('notifications_enabled', v)}
-            />
+          <h4 className="font-medium text-foreground" id="appearance-label">
+            Appearance
+          </h4>
+          <p className="text-sm text-muted-foreground mt-1">
+            Choose a comfortable background. Status icons adjust automatically.
+          </p>
+          <div
+            className="grid grid-cols-3 gap-2 mt-4"
+            role="group"
+            aria-labelledby="appearance-label"
+          >
+            {[
+              { value: 'light', label: 'Light', icon: Sun },
+              { value: 'dark', label: 'Dark', icon: Moon },
+              { value: 'system', label: 'Follow Device', icon: Smartphone },
+            ].map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                type="button"
+                disabled={isSavingPreferences}
+                aria-pressed={preferences.appearance === value}
+                onClick={() => updatePreferences({ appearance: value }, 'Appearance saved')}
+                className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 p-3 text-xs font-medium min-h-20 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  preferences.appearance === value
+                    ? 'border-[#CEB888] bg-[#CEB888]/15 text-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                <Icon className="h-5 w-5" aria-hidden="true" />
+                {label}
+              </button>
+            ))}
           </div>
         </Card>
 
-        {/* Event Alerts */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-                <Badge className="bg-[#CEB888] text-gray-900 text-xs">!</Badge>
-              </div>
-              <div>
-                <div className="font-medium text-gray-900">Event Alerts</div>
-                <div className="text-sm text-gray-500">Get notified about parking changes</div>
-              </div>
-            </div>
-            <Switch
-              checked={userPrefs?.event_alerts ?? true}
-              onCheckedChange={(v) => handleToggle('event_alerts', v)}
-            />
-          </div>
-        </Card>
+        <SettingToggle
+          icon={Bell}
+          iconClassName="bg-muted text-muted-foreground"
+          title="Notifications"
+          description="Show in-app alerts and updates"
+          checked={preferences.notifications_enabled}
+          disabled={isSavingPreferences}
+          onCheckedChange={(value) => updatePreferences({ notifications_enabled: value })}
+        />
 
-        {/* Bus Delay Alerts */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                <BellOff className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <div className="font-medium text-gray-900">Bus Delay Alerts</div>
-                <div className="text-sm text-gray-500">Notify when buses are delayed</div>
-              </div>
-            </div>
-            <Switch
-              checked={userPrefs?.bus_delay_alerts ?? true}
-              onCheckedChange={(v) => handleToggle('bus_delay_alerts', v)}
-            />
-          </div>
-        </Card>
+        <SettingToggle
+          icon={() => <Badge className="bg-[#CEB888] text-neutral-900 text-xs">!</Badge>}
+          iconClassName="bg-amber-100 dark:bg-amber-950/50"
+          title="Event Alerts"
+          description="Show parking changes for active events"
+          checked={preferences.event_alerts}
+          disabled={isSavingPreferences}
+          onCheckedChange={(value) => updatePreferences({ event_alerts: value })}
+        />
 
-        {/* Default Permit */}
+        <SettingToggle
+          icon={BellOff}
+          iconClassName="bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-300"
+          title="Bus Delay Alerts"
+          description="Highlight delayed buses in the app"
+          checked={preferences.bus_delay_alerts}
+          disabled={isSavingPreferences}
+          onCheckedChange={(value) => updatePreferences({ bus_delay_alerts: value })}
+        />
+
         <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Shield className="w-5 h-5 text-blue-600" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-950/50 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Shield className="w-5 h-5 text-blue-600 dark:text-blue-300" aria-hidden="true" />
               </div>
               <div>
-                <div className="font-medium text-gray-900">Your Permit</div>
-                <div className="text-sm text-gray-500">Filter lots by permit type</div>
+                <div className="font-medium text-foreground">Your Permit</div>
+                <div className="text-sm text-muted-foreground">Default parking filter</div>
               </div>
             </div>
             <Select
-              value={userPrefs?.default_permit || ''}
-              onValueChange={(v) => handleToggle('default_permit', v)}
+              value={preferences.default_permit || 'none'}
+              onValueChange={(value) =>
+                updatePreferences({ default_permit: value === 'none' ? '' : value })
+              }
+              disabled={isSavingPreferences}
             >
-              <SelectTrigger className="w-28">
+              <SelectTrigger className="w-36" aria-label="Default parking permit">
                 <SelectValue placeholder="Select" />
               </SelectTrigger>
               <SelectContent>
-                {PERMIT_TYPES.map(permit => (
-                  <SelectItem key={permit} value={permit}>{permit}</SelectItem>
+                <SelectItem value="none">No default</SelectItem>
+                {PERMIT_TYPES.map((permit) => (
+                  <SelectItem key={permit} value={permit}>
+                    {permit}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -216,76 +208,108 @@ export default function ProfileTab({ userPrefs }) {
         </Card>
       </motion.div>
 
-      {/* Actions */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
         className="mt-6 space-y-3"
       >
-        <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <HelpCircle className="w-5 h-5 text-gray-500" />
-              <span className="font-medium text-gray-900">Help & Support</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
-          </div>
-        </Card>
-
-        <Button
-          variant="outline"
-          className="w-full h-12 text-red-600 border-red-200 hover:bg-red-50"
-          onClick={handleLogout}
-        >
-          <LogOut className="w-5 h-5 mr-2" />
-          Sign Out
-        </Button>
+        <MenuLink to="/support" icon={HelpCircle} label="Help & Support" />
+        <MenuLink to="/privacy" icon={FileText} label="Privacy Policy" />
+        <MenuLink to="/about" icon={Info} label="About & Data Sources" />
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full h-12 text-gray-400 hover:text-red-600 hover:bg-red-50"
+              className="w-full h-12 text-muted-foreground hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/50"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Account
+              <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
+              Remove Saved App Data
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Account</AlertDialogTitle>
+              <AlertDialogTitle>Remove Boiler Transport Data?</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete your account? This action cannot be undone. All your saved preferences, favorites, and data will be permanently removed.
+                This removes the favorites, permit, and alert preferences saved by Boiler Transport
+                on this device.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-red-600 hover:bg-red-700 text-white"
-                onClick={handleDeleteAccount}
+                onClick={handleRemoveData}
               >
-                Delete Account
+                Remove App Data
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       </motion.div>
 
-      {/* Footer */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.4 }}
         className="mt-8 text-center"
       >
-        <div className="text-xs text-gray-400">
-          Boiler Transport v1.0
-        </div>
-        <div className="text-xs text-gray-400 mt-1">
-          Made for Boilermakers 🚂
+        <div className="text-xs text-muted-foreground">Boiler Transport v{APP_CONFIG.version}</div>
+        <div className="text-xs text-muted-foreground mt-1">
+          {APP_CONFIG.universityAffiliated
+            ? 'Campus transportation companion'
+            : 'Independent campus transportation companion'}
         </div>
       </motion.div>
     </div>
+  );
+}
+
+function MenuLink({ to, icon: Icon, label }) {
+  return (
+    <Link to={to} className="block w-full" aria-label={label}>
+      <Card className="p-4 hover:bg-background transition-colors">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Icon className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
+            <span className="font-medium text-foreground">{label}</span>
+          </div>
+          <ChevronRight className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
+        </div>
+      </Card>
+    </Link>
+  );
+}
+
+function SettingToggle({
+  icon: Icon,
+  iconClassName,
+  title,
+  description,
+  checked,
+  disabled,
+  onCheckedChange,
+}) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconClassName}`}>
+            <Icon className="w-5 h-5" aria-hidden="true" />
+          </div>
+          <div>
+            <div className="font-medium text-foreground">{title}</div>
+            <div className="text-sm text-muted-foreground">{description}</div>
+          </div>
+        </div>
+        <Switch
+          checked={checked}
+          disabled={disabled}
+          onCheckedChange={onCheckedChange}
+          aria-label={title}
+        />
+      </div>
+    </Card>
   );
 }

@@ -1,81 +1,28 @@
-import { Toaster } from "@/components/ui/toaster"
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClientInstance } from '@/lib/query-client'
-import NavigationTracker from '@/lib/NavigationTracker'
-import { pagesConfig } from './pages.config'
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClientInstance } from '@/lib/query-client';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import PageNotFound from './lib/PageNotFound';
-import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import PageNotFound from '@/pages/PageNotFound';
+import Home from '@/pages/Home';
+import Layout from '@/Layout';
+import { APP_TAB_IDS } from '@/lib/tabs';
 import { useEffect } from 'react';
+import { AboutPage, PrivacyPolicyPage, SupportPage } from '@/pages/LegalPages';
+import AppearanceSync from '@/components/common/AppearanceSync';
 
-const { Pages, Layout, mainPage } = pagesConfig;
-const mainPageKey = mainPage ?? Object.keys(Pages)[0];
-const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
-
-const LayoutWrapper = ({ children, currentPageName }) => Layout ?
-  <Layout currentPageName={currentPageName}>{children}</Layout>
-  : <>{children}</>;
-
-const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
-
-  // Show loading spinner while checking app public settings or auth
-  if (isLoadingPublicSettings || isLoadingAuth) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  // Handle authentication errors
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
-    }
-  }
-
-  // Render the main app
+const ApplicationRoutes = () => {
   return (
     <Routes>
-      <Route path="/" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
-      <Route path="/parking" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
-      <Route path="/bus" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
-      <Route path="/events" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
-      <Route path="/profile" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
-      {Object.entries(Pages).map(([path, Page]) => (
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/support" element={<SupportPage />} />
+      <Route path="/about" element={<AboutPage />} />
+      {['/', '/Home', ...APP_TAB_IDS.map((tab) => `/${tab}`)].map((path) => (
         <Route
           key={path}
-          path={`/${path}`}
+          path={path}
           element={
-            <LayoutWrapper currentPageName={path}>
-              <Page />
-            </LayoutWrapper>
+            <Layout>
+              <Home />
+            </Layout>
           }
         />
       ))}
@@ -84,23 +31,32 @@ const AuthenticatedApp = () => {
   );
 };
 
-
 function App() {
   useEffect(() => {
-    document.documentElement.classList.remove('dark');
+    const url = new URL(window.location.href);
+    const legacyParams = [
+      'access_token',
+      'app_id',
+      'app_base_url',
+      'clear_access_token',
+      'from_url',
+      'functions_version',
+    ];
+    const hadLegacyParams = legacyParams.some((name) => url.searchParams.has(name));
+    legacyParams.forEach((name) => url.searchParams.delete(name));
+    if (hadLegacyParams) {
+      window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+    }
   }, []);
 
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <NavigationTracker />
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
-  )
+    <QueryClientProvider client={queryClientInstance}>
+      <AppearanceSync />
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ApplicationRoutes />
+      </Router>
+    </QueryClientProvider>
+  );
 }
 
-export default App
+export default App;
